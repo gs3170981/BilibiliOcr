@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="ie=edge">
+  <title>BilibiliOcr</title>
+</head>
+<body>
+  <!-- <img src="https://static.geetest.com/nerualpic/word_l1_zh_2020.03.16/harley1/2cbacc3068dbde3905fa848726eab3d2.jpg" alt=""> -->
+</body>
+<script>
+  
+  class BilibiliOcr {
+    constructor(props) {
+      this.props = props
+      this.data = {
+        img: {
+          canvas: '',
+          ctx: '',
+          // 1296 为下一个起始列值
+          nextCol: 1296,
+          // 被选中的点位
+          bigData: [],
+          // data数值
+          imageData: {},
+          // 原始数据
+          oldImageData: {},
+          // 被选中的矩形方阵数据
+          recData: []
+        },
+        verImg: {
+          canvas: '',
+          ctx: '',
+          imageData: {},
+          // 几个字
+          num: 0,
+        }
+      }
+      this.init()
+    }
+    init () {
+      this.verImgInit()
+      this.imgInit()
+    }
+    imgInit() {
+      const img = new Image()
+      const _this = this
+      
+      img.crossOrigin = "Anonymous"
+      img.src = this.props.url
+      img.onload = function () {
+        const canvas = document.createElement('canvas')
+        const ctx = canvas.getContext('2d')
+        // canvas.width = 344
+        canvas.width = 324
+        canvas.height = 324
+        ctx.drawImage(this, 10, 10, 324, 324, 0, 0, 324, 324)
+        // ctx.drawImage(this, 0, 0)
+        // TODO 测试
+        // canvas.width = 100
+        // canvas.height = 100
+        // ctx.drawImage(this, 60, 195, 100, 100, 0, 0, 100, 100)
+        _this.data.img.canvas = canvas
+        _this.data.img.ctx = ctx
+        
+        document.body.appendChild(canvas)
+        _this.imgHandle()
+      }
+    }
+    imgHandle() {
+      let {
+        canvas,
+        ctx
+      } = this.data.img
+
+      // ctx.imageSmoothingEnabled = false
+      // ctx.mozImageSmoothingEnabled = false
+      // ctx.webkitImageSmoothingEnabled = false
+      // ctx.msImageSmoothingEnabled = false
+      
+      this.data.img.imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
+      this.data.img.oldImageData = JSON.parse(JSON.stringify(this.data.img.imageData))
+
+      // invert(imageData.data)
+      // this.grayscale()
+
+      // TODO 对比度渲染像素点 - 为了演示效果才嵌套 - 最后要取消
+      setTimeout(() => {
+        this.grayscale()
+
+        setTimeout(() => {
+          this.pixels()
+
+          // 矩形降噪 - 矩形范围值
+          setTimeout(() => {
+            this.recHandle()
+
+            // 矩形降噪
+            setTimeout(() => {
+              this.recRender()
+
+              // 还原背景图
+              setTimeout(() => {
+                this.rezCanvas()
+              }, 500)
+            }, 500)
+          }, 0)
+        }, 500)
+
+      }, 500)
+
+      // setTimeout(() => {
+      //   this.recHandle(50)
+      // }, 1000)
+
+    }
+    verImgInit() {
+      const img = new Image()
+      const _this = this
+      let {
+        canvas,
+        ctx
+      } = this.data.verImg
+
+      img.crossOrigin = "Anonymous"
+      img.src = this.props.url
+      img.onload = function () {
+        canvas = document.createElement('canvas')
+        ctx = canvas.getContext('2d')
+        canvas.width = 116
+        canvas.height = 40
+        ctx.drawImage(this, 0, 344, 116, 40, 0, 0, 116, 40)
+        
+        _this.data.verImg.canvas = canvas
+        _this.data.verImg.ctx = ctx
+        document.body.appendChild(canvas)
+        _this.verImgHandle()
+      }
+    }
+    verImgHandle() {
+      // 检查几个字
+      const num = this.checkNumber()
+      console.log('当前字个数为：', num)
+      this.data.verImg.num = num
+    }
+    checkNumber() {
+      let {
+        canvas,
+        ctx
+      } = this.data.verImg
+      let imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
+      let data = imageData.data
+      const width = 116
+      const fine = 3
+      const mid = parseInt(width / 4 / 2) * 4
+      // const mid2 = parseInt(width / 2) * 4
+
+      this.data.verImg.imageData = imageData
+
+      // 测试左侧是否有值
+      let isL1 = this.isCheckThickness(mid, width)
+      let isL2 = this.isCheckThickness(mid + parseInt(width / 4) * 4, width)
+      let isL3 = this.isCheckThickness(mid + width / 2 * 4, width)
+      let isL4 = this.isCheckThickness(mid * 3 + width / 2 * 4, width)
+      // let isL3 = this.isCheckThickness(mid, width)
+      // let isL4 = this.isCheckThickness(mid, width)
+
+      this.data.verImg.ctx.putImageData(imageData, 0, 0)
+
+      // 都碰到为4
+      if (isL1 && isL2 && isL3 && isL4) {
+        return 4
+      }
+      // 左边没擦到，第二根擦到为2
+      else if (!isL1 && isL2) {
+        return 2
+      }
+
+      return 3
+      // 测试是否为两字 || 四字
+      
+      
+
+
+      // this.data.verImg.imageData = 
+
+    }
+    // 检测个数
+    isCheckThickness(mid, width, fine = 3) {
+      let {
+        imageData
+      } = this.data.verImg
+      const data = imageData.data
+      let isTrue = false
+      for (let i = mid; i < data.length; i += width * 4) {
+        for (let j = 0; j < fine; j += 4) {
+          let _i = i - j
+          
+          if (data[_i] < 200) {
+            // TODO 这里以后直接return，目前仅为了演示
+            // return true
+            isTrue = true
+            // break
+          }
+          data[_i]     = 255; // red
+          data[_i + 1] = 0; // green
+          data[_i + 2] = 0; // blue
+        }
+        // if (num === 4) {
+        //   break
+        // }
+      }
+      return isTrue
+    }
+    pixels() {
+      const {
+        imageData
+      } = this.data.img
+      // 100 * 100 * 4 = 40000 像素点
+      // 100 * 1 * 4 = 400
+      // 前后对比值 突然超过 90 且 超过后在 > 2 < 10 个像素点内 比开始的对比值高 即可，若超过10个像素仍然很高，则放弃
+      const _this = this
+      let data = imageData.data
+      let preVal, nowVal, isBig, bigCount = 0, bigData = []
+      let countAvg = 90, countStart = 2, countEnd = 10
+      for (let i = 0, j = 0; i < data.length; i += 4, j += 4) {
+        if (!preVal) {
+          preVal = data[i]
+          // 当前无值，则跳过第一次
+          if (!nowVal) {
+            // return
+            continue
+          }
+        }
+        nowVal = data[i]
+        
+        if (Math.abs(preVal - nowVal) > countAvg && bigCount < countEnd) {
+          bigCount++
+          bigData.push(i)
+        } else {
+          bigCount = 0
+          bigData = []
+          preVal = data[i]
+        }
+
+        if (bigCount > countStart && bigCount < countEnd) {
+          for (let _i = 0; _i < bigData.length; _i++) {
+            // console.log("%c" + bigData[_i], "color: green")
+            // console.log(`i ${i} (${data[i]}, ${data[i + 1]}, ${data[i + 2]})`)
+            data[bigData[_i]] = 0
+            data[bigData[_i] + 1] = 255
+            data[bigData[_i] + 2] = 0
+            _this.data.img.bigData.push(bigData[_i])
+          }
+          bigData = []
+        }
+
+      }
+      this.data.img.ctx.putImageData(imageData, 0, 0)
+    }
+    // 矩形去噪 - 盒子宽度
+    recHandle(recWidth = 50) {
+      const {
+        imageData,
+        nextCol
+      } = this.data.img
+      let data = imageData.data
+      let bigData = this.data.img.bigData
+      let newBigData = []
+      // 右边碰壁值(否则右边会穿透左边)
+      const lastCol = 976
+      // 小于改值则清空 --- 还是前面对比度太差，导致后面去噪误差较大
+      let clearSumAvg = 280
+      // 盒子统计数据
+      let recData = []
+      let recDataAvg
+
+      if (bigData.length > 7000) {
+        console.warn('捕获到超出7000的像素点，过于复杂不计算', bigData.length)
+        return
+      }
+      if (!bigData.length) {
+        console.warn('无像素点捕获，退出')
+        return
+      }
+      // if (bigData.length < 1000) {
+      //   clearSumAvg = 650
+      // }
+      // else if (bigData.length < 2000) {
+      //   clearSumAvg = 320
+      // }
+      // console.log("%c" + this.data.img.bigData, "color: green")
+      // TODO 可以修改i值调试位置
+      for (let i = 0; i < bigData.length; i++) {
+      // for (let i = 1665; i < 1665; i++) {
+        // let sum = 0
+        // 列
+        let line = bigData[i] - parseInt(recWidth / 2) * (nextCol - recWidth * 4)
+        // let line = bigData[i]
+
+        // 防止突破顶端
+        if (line <= 0) {
+          line = bigData[i] - parseInt(recWidth / 2) * 4
+        }
+        // 防止突破左端
+        if (nextCol - line % nextCol <= recWidth * 4) {
+          line += recWidth * 4 - (nextCol - line % nextCol)
+        }
+        // 防止突破右端
+        if (nextCol - line % nextCol <= recWidth * 4) {
+          line -= recWidth * 4 - (nextCol - line % nextCol)
+        }
+
+        recData.push({
+          // i: bigData[i],
+          // lineStart: line,
+          data: [],
+          val: 0,
+          bigDataKey: i,
+          sum: 0,
+        })
+        // // 防止突破左端 --- 还得一样写一遍，防止偏移后仍然突破右边
+        // if (line <= 0 || nextCol - line % nextCol <= recWidth * 4) {
+        //   line = bigData[i]
+        // }
+
+        for (let j = 0; j < recWidth; j++) {
+          // 行
+          let j_s = line + j * nextCol
+          let j_e = line + j * nextCol + recWidth * 4
+
+          for (let z = j_s; z < j_e; z += 4) {
+            if (data[z + 1] === 255) {
+              // sum ++
+              recData[i].data.push(z)
+              recData[i].sum++
+              // TODO 测试当前点位开始
+              // data[z] = 0
+              // data[z + 1] = 255
+              // this.data.img.ctx.putImageData(imageData, 0, 0)
+            }
+            // TODO 测试矩形位置
+            // data[z] = 0
+            // data[z + 1] = 255
+            // this.data.img.ctx.putImageData(imageData, 0, 0)
+          }
+        }
+        // recData[i].val = bigData[i]
+        recData[i].val = line
+
+        // console.log(sum)
+        // if (sum > clearSumAvg) {
+        //   console.log("%c" + i, "color: green")
+        //   data[bigData[i]] = 0
+        //   data[bigData[i] + 1] = 255
+        //   this.data.img.ctx.putImageData(imageData, 0, 0)
+        // }
+        // TODO
+        // break
+      }
+      // 升序
+      recData = recData.sort(this.compare('sum'))
+
+      // 综合去重
+      recData = this.dupRemoval(recData)
+
+      // 去除范围杂质
+      recData = this.dupImpurity(recData, 200)
+
+      // recDataAvg = (recData[0].sum + recData[recData.length - 1].sum) / 2
+      console.log('一共点数：', bigData.length)
+      console.log('降噪后值，取前六名：', recData)
+      // console.log('平均值：', recDataAvg)
+
+
+      recData.map(item => {
+        item.data.map(items => {
+          data[items] = 255
+          data[items + 1] = 0
+          data[items + 2] = 0
+          newBigData.push(items)
+        })
+      })
+
+      this.data.img.ctx.putImageData(imageData, 0, 0)
+
+      this.data.img.recData = recData
+      this.data.img.bigData = newBigData
+      console.log('捕获点数：', newBigData.length)
+    }
+    // 矩形填充
+    recRender(recWidth = 80) {
+      const {
+        bigData,
+        nextCol,
+        recData,
+        imageData,
+        ctx,
+        canvas
+      } = this.data.img
+      let data = imageData.data
+      let len = recData.length > 6 ? 6 : recData.length
+
+      for (let i = 0; i < len; i++) {
+
+        // 15 是 (recWidth - 50 / 2)
+        let line = recData[i].val - 15 * nextCol - 15 * 4
+
+        for (let j = 0; j < recWidth; j++) {
+          // 行
+          let j_s = line + j * nextCol
+          let j_e = line + j * nextCol + recWidth * 4
+
+          for (let z = j_s; z < j_e; z += 4) {
+            // TODO 测试矩形位置
+            // data[z] = 0
+            // data[z + 1] = 0
+            // data[z + 2] = 255
+            data[z + 3] = 100
+          }
+        }
+      }
+      this.data.img.ctx.putImageData(imageData, 0, 0)
+    }
+    // 还原canvas
+    rezCanvas() {
+      const {
+        imageData,
+        oldImageData,
+      } = this.data.img
+      let data = imageData.data
+      let oldData = oldImageData.data
+
+      for (let i = 0; i < data.length; i += 4) {
+        data[i]     = oldData[i]; // red
+        data[i + 1] = oldData[i + 1]; // green
+        data[i + 2] = oldData[i + 2]; // blue
+      }
+      this.data.img.ctx.putImageData(imageData, 0, 0)
+    }
+    // 置灰
+    grayscale() {
+      const {
+        imageData
+      } = this.data.img
+      let data = imageData.data
+
+      for (let i = 0; i < data.length; i += 4) {
+        let avg = (data[i] + data[i +1] + data[i + 2]) / 3;
+        data[i]     = avg; // red
+        data[i + 1] = avg; // green
+        data[i + 2] = avg; // blue
+      }
+      this.data.img.ctx.putImageData(imageData, 0, 0)
+    }
+    // 综合去重
+    dupRemoval(data) {
+      let dupArr = []
+      return data.map(item => {
+        let newItem = []
+        item.data.map(val => {
+          if (!dupArr.includes(val)) {
+            dupArr.push(val)
+            newItem.push(val)
+          } else {
+            item.sum--
+          }
+        })
+        return {
+          ...item,
+          data: newItem,
+        }
+      })
+    }
+    // 去杂质 --- 递归直到算到符合校验的个数
+    dupImpurity(data, val) {
+      const {
+        num
+      } = this.data.verImg
+      let newData = []
+
+      data.map(item => item.sum >= val && newData.push(item))
+      if (newData.length < num) {
+        return this.dupImpurity(data, val - 10)
+      }
+      return newData
+    }
+    // 升序
+    compare(property) {
+      return (now, next) => {
+        let val1 = now[property]
+        let val2 = next[property]
+        return val2 - val1
+      }
+    }
+  }
+  // setTimeout(() => {
+  new BilibiliOcr({
+    url: './img/4.jpg'
+  })
+  // }, 500)
+  // var img = new Image();
+  // img.crossOrigin = "Anonymous";
+  // img.src = './img/3.jpg';
+  // img.onload = function() {
+  //   draw(this);
+  // };
+  // function draw(img) {
+  //   var canvas = document.createElement('canvas')
+  //   var ctx = canvas.getContext('2d')
+  //   canvas.width = 344
+  //   canvas.height = 344
+  //   ctx.drawImage(img, 0, 0)
+  //   document.body.appendChild(canvas)
+
+  //   handle(canvas, ctx)
+  //   // img.style.display = 'none';
+  //   // var zoomctx = document.getElementById('zoom').getContext('2d');
+  
+  //   // var smoothbtn = document.getElementById('smoothbtn');
+  //   // var toggleSmoothing = function(event) {
+  //   //   zoomctx.imageSmoothingEnabled = this.checked;
+  //   //   zoomctx.mozImageSmoothingEnabled = this.checked;
+  //   //   zoomctx.webkitImageSmoothingEnabled = this.checked;
+  //   //   zoomctx.msImageSmoothingEnabled = this.checked;
+  //   // };
+  //   // smoothbtn.addEventListener('change', toggleSmoothing);
+  // }
+  // function handle(canvas, ctx) {
+  //   ctx.imageSmoothingEnabled = false
+  //   ctx.mozImageSmoothingEnabled = false
+  //   ctx.webkitImageSmoothingEnabled = false
+  //   ctx.msImageSmoothingEnabled = false
+    
+  //   var imageData = ctx.getImageData(0,0,canvas.width, canvas.height);
+  //   // invert(imageData.data)
+  //   grayscale(imageData.data)
+  //   ctx.putImageData(imageData, 0, 0);
+  // }
+  // var invert = function(data) {
+  //   for (var i = 0; i < data.length; i += 4) {
+  //     data[i]     = 255 - data[i];     // red
+  //     data[i + 1] = 255 - data[i + 1]; // green
+  //     data[i + 2] = 255 - data[i + 2]; // blue
+  //   }
+  // };
+
+  // var grayscale = function(data) {
+  //   for (var i = 0; i < data.length; i += 4) {
+  //     var avg = (data[i] + data[i +1] + data[i +2]) / 3;
+  //     data[i]     = avg; // red
+  //     data[i + 1] = avg; // green
+  //     data[i + 2] = avg; // blue
+  //   }
+  // };
+
+</script>
+</html>
