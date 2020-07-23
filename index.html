@@ -438,7 +438,7 @@
       } = this.data.img
       // TODO 容差值
       const diff = 60
-      // const continuityDiff = 15
+      const continuityDiff = 20
       let data = imageData.data
       let colorArr = []
       let sortArr = []
@@ -464,8 +464,7 @@
       
       // TODO 展示测试一下
       colorArr.map((item, _i) => {
-        let recRenderDataHandle = []
-        let _sum = 0
+        
         // if (_i > 0) return
         item.recRenderData.map(i => {
           if (Math.abs(data[i] - item.colorMax) < diff) {
@@ -497,6 +496,47 @@
           //   recRenderDataHandle = []
           // }
         })
+        // 矩形去噪 --- 是否要从 大 到小 递归下continuityDiff值？因为有些图去不掉
+        // 还有各种 纵横长方形的东西
+        let recRenderDataHandle = []
+        let _sum = 0
+
+        item.recRenderData.map((__i, index) => {
+          // if (index !== 20) return
+          // TODO 80 为rec矩形宽
+          for (let j = __i; j < __i + continuityDiff; j += 4) {
+            // 筛选长方形值
+            for (let z = j; z < j + continuityDiff * canvas.width * 2; z += 4 * canvas.width) {
+            // 筛选正方形值
+            // for (let z = j; z < j + continuityDiff * canvas.width; z += 4 * canvas.width) {
+              // data[z]     = 0
+              // data[z + 1] = 255
+              // data[z + 2] = 0
+              if (data[z] === 255) {
+                _sum++
+                recRenderDataHandle.push(__i)
+              } else {
+                _sum = 0
+                recRenderDataHandle = []
+                break
+                // continue
+              }
+            }
+          }
+          // console.log(_sum)
+          if (_sum >= continuityDiff * continuityDiff - 4) {
+            recRenderDataHandle.map(___i => {
+              data[___i]     = 0
+              data[___i + 1] = 255
+              data[___i + 2] = 0
+              // data[___i + 3] = 255
+            })
+            item.sum--
+            _sum = 0
+            recRenderDataHandle = []
+          }
+        })
+        
         // recRenderDataHandle.map(i => {
 
         // })
@@ -627,6 +667,7 @@
     // 计算color中出现最多的值
     colorMax(arr) {
       let data = {}
+      let newArr = []
       // 累积
       arr.map(val => {
         if (data[val + ''] >= 0) {
@@ -639,7 +680,10 @@
         key: 0,
         val: 0
       }
-      // debugger
+      newArr = Object.keys(data)
+      for (let i = 0; i < newArr.length / 2; i++) {
+        delete data[newArr[i]]
+      }
       // 比较
       Object.keys(data).map(key => {
         if (data[key] > max.val) {
@@ -817,7 +861,7 @@
   }
   // setTimeout(() => {
   new BilibiliOcr({
-    url: './img/4.jpg'
+    url: './img/10.jpg'
   })
   // }, 500)
   // var img = new Image();
