@@ -8,8 +8,8 @@
   <style>
     .canvas {
       position: relative;
-      height: 324px;
-      width: 324px;
+      height: 260px;
+      width: 260px;
     }
     .pos {
       color: white;
@@ -38,10 +38,24 @@
       this.props = props
       this.data = {
         img: {
+          // width: 324,
+          // height: 324,
+          width: 260,
+          height: 260,
+          countAvg: 90, // 对比值 - 差
+          countStart: 2, // 对比起始值
+          countEnd: 20, // 结束值 --- 超出则算是背景图
+          recWidth: 50, // 锁定盒子宽度(越小盒子越多) - 该值修改可能recHandle内部也要微调
+          bigDataMax: 7000, // 像素点超出不计算
+          dupImpurityValue: 200, // 去除范围杂质(数值以内的矩形不考虑)保证个数到校验的数量含以上
+          recWidthAgain: 80, // 第二次锁定盒子宽度，扩大选取范围 - 该值修改可能recRender内部也要微调
+          diff: 60, // 计算像素点可包含的容差值
+          continuityDiff: 15, // 二次过滤像素点容差值 - 该值修改可能recRenderDataFilter内部也要微调
+          posDiff: 30, // 选中矩形与字符进行像素点比较值，若没有则会递归变大
           canvas: '',
           ctx: '',
           // 1296 为下一个起始列值
-          nextCol: 1296,
+          // nextCol: 1296,
           // 被选中的点位
           bigData: [],
           // data数值
@@ -54,6 +68,8 @@
           colorArr: []
         },
         verImg: {
+          width: 116,
+          height: 40,
           canvas: '',
           ctx: '',
           imageData: {},
@@ -74,7 +90,9 @@
       const _this = this
       let {
         canvas,
-        ctx
+        ctx,
+        width,
+        height
       } = this.data.verImg
 
       img.crossOrigin = "Anonymous"
@@ -82,9 +100,9 @@
       img.onload = function () {
         canvas = document.createElement('canvas')
         ctx = canvas.getContext('2d')
-        canvas.width = 116
-        canvas.height = 40
-        ctx.drawImage(this, 0, 344, 116, 40, 0, 0, 116, 40)
+        canvas.width = width
+        canvas.height = height
+        ctx.drawImage(this, 0, 344, width, height, 0, 0, width, height)
         
         _this.data.verImg.canvas = canvas
         _this.data.verImg.ctx = ctx
@@ -112,6 +130,10 @@
       this.imgInit()
     }
     imgInit() {
+      const {
+        width,
+        height,
+      } = this.data.img
       const img = new Image()
       const _this = this
       
@@ -121,9 +143,9 @@
         const canvas = document.createElement('canvas')
         const ctx = canvas.getContext('2d')
         // canvas.width = 344
-        canvas.width = 324
-        canvas.height = 324
-        ctx.drawImage(this, 10, 10, 324, 324, 0, 0, 324, 324)
+        canvas.width = width
+        canvas.height = height
+        ctx.drawImage(this, 10, 10, width, height, 0, 0, width, height)
         // ctx.drawImage(this, 0, 0)
         // TODO 测试
         // canvas.width = 100
@@ -139,19 +161,14 @@
     }
     imgHandle() {
       let {
-        canvas,
+        width,
+        height,
         ctx,
       } = this.data.img
 
-      // ctx.imageSmoothingEnabled = false
-      // ctx.mozImageSmoothingEnabled = false
-      // ctx.webkitImageSmoothingEnabled = false
-      // ctx.msImageSmoothingEnabled = false
-      
-      this.data.img.imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
+      this.data.img.imageData = ctx.getImageData(0, 0, width, height)
       this.data.img.oldImageData = JSON.parse(JSON.stringify(this.data.img.imageData))
 
-      // invert(imageData.data)
       // 置灰
       this.grayscale()
       // 初步捕获对比度
@@ -160,58 +177,20 @@
       this.recHandle()
       // 矩形渲染
       this.recRender()
-      // 重置像素点
+      // 重置像素点 - 会影响效果 注释吧
       // this.rezCanvas()
       // 计算像素点 - 及计算区域中的高频反差像素
       this.computePix()
-      // this.rezCanvas()
-      // let data = this.data.img.imageData.data
-
-      // this.data.img.recData.map(item => {
-      //   item.data.map(val => {
-      //     data[val] = 255
-      //     data[val + 1] = 0
-      //     data[val + 2] = 0
-      //   })
-      // })
-      // this.data.img.ctx.putImageData(this.data.img.imageData, 0, 0)
-
       // 打点
       this.posRender()
-      // 最后需要把 临时的 渲染 给关闭，可以提高速度
-      // TODO 对比度渲染像素点 - 为了演示效果才嵌套 - 最后要取消
-      // setTimeout(() => {
-      //   this.grayscale()
-
-      //   setTimeout(() => {
-      //     this.pixels()
-
-      //     // 矩形降噪 - 矩形范围值
-      //     setTimeout(() => {
-      //       this.recHandle()
-
-      //       // 矩形降噪
-      //       setTimeout(() => {
-      //         this.recRender()
-
-      //         // 还原背景图
-      //         setTimeout(() => {
-      //           this.rezCanvas()
-      //         }, 500)
-      //       }, 500)
-      //     }, 0)
-      //   }, 500)
-
-      // }, 500)
-
-      // setTimeout(() => {
-      //   this.recHandle(50)
-      // }, 1000)
 
     }
     pixels() {
       const {
-        imageData
+        imageData,
+        countAvg,
+        countStart,
+        countEnd,
       } = this.data.img
       // 100 * 100 * 4 = 40000 像素点
       // 100 * 1 * 4 = 400
@@ -219,13 +198,11 @@
       const _this = this
       let data = imageData.data
       let preVal, nowVal, isBig, bigCount = 0, bigData = []
-      let countAvg = 90, countStart = 2, countEnd = 10
       for (let i = 0, j = 0; i < data.length; i += 4, j += 4) {
         if (!preVal) {
           preVal = data[i]
           // 当前无值，则跳过第一次
           if (!nowVal) {
-            // return
             continue
           }
         }
@@ -242,8 +219,6 @@
 
         if (bigCount > countStart && bigCount < countEnd) {
           for (let _i = 0; _i < bigData.length; _i++) {
-            // console.log("%c" + bigData[_i], "color: green")
-            // console.log(`i ${i} (${data[i]}, ${data[i + 1]}, ${data[i + 2]})`)
             data[bigData[_i]] = 0
             data[bigData[_i] + 1] = 255
             data[bigData[_i] + 2] = 0
@@ -256,41 +231,32 @@
       this.data.img.ctx.putImageData(imageData, 0, 0)
     }
     // 矩形去噪 - 盒子宽度
-    recHandle(recWidth = 50) {
+    recHandle(recWidth = this.data.img.recWidth) {
       const {
         imageData,
-        nextCol
+        width,
+        bigDataMax,
+        dupImpurityValue
       } = this.data.img
+      const nextCol = width * 4
       let data = imageData.data
       let bigData = this.data.img.bigData
       let newBigData = []
-      // 右边碰壁值(否则右边会穿透左边)
-      const lastCol = 976
-      // 小于改值则清空 --- 还是前面对比度太差，导致后面去噪误差较大
-      let clearSumAvg = 280
       // 盒子统计数据
       let recData = []
       let recDataAvg
 
-      if (bigData.length > 7000) {
-        console.warn('捕获到超出7000的像素点，过于复杂不计算', bigData.length)
+      if (bigData.length > bigDataMax) {
+        console.warn(`捕获到超出${bigDataMax}的像素点，过于复杂不计算`, bigData.length)
         return
       }
       if (!bigData.length) {
         console.warn('无像素点捕获，退出')
         return
       }
-      // if (bigData.length < 1000) {
-      //   clearSumAvg = 650
-      // }
-      // else if (bigData.length < 2000) {
-      //   clearSumAvg = 320
-      // }
       // console.log("%c" + this.data.img.bigData, "color: green")
       // TODO 可以修改i值调试位置
       for (let i = 0; i < bigData.length; i++) {
-      // for (let i = 1665; i < 1665; i++) {
-        // let sum = 0
         // 列
         let line = bigData[i] - parseInt(recWidth / 2) * (nextCol - recWidth * 4)
         // let line = bigData[i]
@@ -309,17 +275,11 @@
         }
 
         recData.push({
-          // i: bigData[i],
-          // lineStart: line,
           data: [],
           val: 0,
           bigDataKey: i,
           sum: 0,
         })
-        // // 防止突破左端 --- 还得一样写一遍，防止偏移后仍然突破右边
-        // if (line <= 0 || nextCol - line % nextCol <= recWidth * 4) {
-        //   line = bigData[i]
-        // }
 
         for (let j = 0; j < recWidth; j++) {
           // 行
@@ -328,32 +288,13 @@
 
           for (let z = j_s; z < j_e; z += 4) {
             if (data[z + 1] === 255) {
-              // sum ++
               recData[i].data.push(z)
               recData[i].sum++
-              // TODO 测试当前点位开始
-              // data[z] = 0
-              // data[z + 1] = 255
-              // this.data.img.ctx.putImageData(imageData, 0, 0)
             }
-            // TODO 测试矩形位置
-            // data[z] = 0
-            // data[z + 1] = 255
-            // this.data.img.ctx.putImageData(imageData, 0, 0)
           }
         }
         // recData[i].val = bigData[i]
         recData[i].val = line
-
-        // console.log(sum)
-        // if (sum > clearSumAvg) {
-        //   console.log("%c" + i, "color: green")
-        //   data[bigData[i]] = 0
-        //   data[bigData[i] + 1] = 255
-        //   this.data.img.ctx.putImageData(imageData, 0, 0)
-        // }
-        // TODO
-        // break
       }
       // 升序
       recData = recData.sort(this.compare('sum'))
@@ -362,13 +303,12 @@
       recData = this.dupRemoval(recData)
 
       // 去除范围杂质
-      recData = this.dupImpurity(recData, 200)
+      recData = this.dupImpurity(recData, dupImpurityValue)
 
       // recDataAvg = (recData[0].sum + recData[recData.length - 1].sum) / 2
       console.log('一共点数：', bigData.length)
       console.log('降噪后值，取前六名：', recData)
       // console.log('平均值：', recDataAvg)
-
 
       recData.map(item => {
         item.data.map(items => {
@@ -386,15 +326,16 @@
       console.log('捕获点数：', newBigData.length)
     }
     // 矩形填充
-    recRender(recWidth = 80) {
+    recRender(recWidth = this.data.img.recWidthAgain) {
       const {
         bigData,
-        nextCol,
+        width,
         recData,
         imageData,
         ctx,
         canvas
       } = this.data.img
+      const nextCol = width * 4
       let data = imageData.data
       // let len = recData.length > 6 ? 6 : recData.length
       let recRenderData = []
@@ -446,11 +387,12 @@
       const {
         recData,
         imageData,
-        canvas
+        diff,
+        width,
+        height,
+        continuityDiff,
       } = this.data.img
       // TODO 容差值
-      const diff = 60
-      const continuityDiff = 15
       let data = imageData.data
       let colorArr = []
       let sortArr = []
@@ -474,9 +416,7 @@
         colorArr[i].colorMax = this.colorMax(colorArr[i].data)
       })
       
-      // TODO 展示测试一下
       colorArr.map((item, _i) => {
-        
         // if (_i > 0) return
         item.recRenderData.map(i => {
           if (Math.abs(data[i] - item.colorMax) < diff) {
@@ -486,48 +426,11 @@
             data[i + 2] = 0
             // data[i + 3] = 0
           }
-          // TODO 对选中的元素再一次筛选计算 - 对连续，长条的数据进行过滤
-          // 这里得做矩形判断 --- 有时间再做吧
-          // if (data[i] === 255) {
-          //   _sum++
-          //   recRenderDataHandle.push(i)
-          // } else {
-          //   _sum = 0
-          //   recRenderDataHandle = []
-          // }
-          // if (_sum > continuityDiff) {
-          //   item.sum -= _sum
-          //   // TODO 可行后，这个得注释掉
-          //   recRenderDataHandle.map(j => {
-          //     data[j]     = 0
-          //     data[j + 1] = 255
-          //     data[j + 2] = 0
-          //     // data[j + 3] = 255
-          //   })
-          //   _sum = 0
-          //   recRenderDataHandle = []
-          // }
         })
         // 矩形去噪 --- 是否要从 大 到小 递归下continuityDiff值？因为有些图去不掉
         // 还有各种 纵横长方形的东西 - 长，高，diff值
-        this.recRenderDataFilter(item, data, 'longRec', continuityDiff * 4, continuityDiff * canvas.width, continuityDiff)
-        this.recRenderDataFilter(item, data, 'heightRec', continuityDiff, continuityDiff * canvas.width * 2 * 2, continuityDiff)
-
-        
-        
-        // recRenderDataHandle.map(i => {
-
-        // })
-
-        // item.recRenderData.map(i => {
-        //   if (Math.abs(data[i] - item.colorMax) < diff) {
-        //     item.sum++
-        //     // data[i]     = 255
-        //     // data[i + 1] = 0
-        //     // data[i + 2] = 0
-        //     data[i + 3] = 0
-        //   }
-        // })
+        this.recRenderDataFilter(item, data, 'longRec', continuityDiff * 4, continuityDiff * width, continuityDiff)
+        this.recRenderDataFilter(item, data, 'heightRec', continuityDiff, continuityDiff * width * 2 * 2, continuityDiff)
 
         // 计算居中值 - 不是取值的居中数而是取数组的中间数
         // 矩形像素点为偶数
@@ -539,27 +442,9 @@
           item.xyCenter = item.recRenderData[parseInt(item.recRenderData.length / 2)]
         }
 
-        // for (let _j = item.xyCenter; _j < item.xyCenter + 50; _j += 4) {
-        //   data[_j] = 0
-        //   data[_j + 1] = 255
-        //   data[_j + 2] = 0
-        //   data[_j + 3] = 255
-        // }
-        
-
         // 计算坐标
-        item.x = item.xyCenter / 4 % canvas.width - 10
-        item.y = (item.xyCenter / 4 - item.x) / canvas.width - 10
-        
-
-        // 先打上点试试
-        // const dom = document.createElement('div')
-        // dom.className = 'pos'
-        // dom.style.left = item.x + 'px'
-        // dom.style.top = item.y + 'px'
-        // document.querySelector('.canvas').appendChild(dom)
-
-        // console.log(`第${_i}个像素点为`, item.sum)
+        item.x = item.xyCenter / 4 % width - 10
+        item.y = (item.xyCenter / 4 - item.x) / width - 10
       })
       // 添加排序字段
       sortArr = JSON.parse(JSON.stringify(colorArr)).sort(this.compare('sum'))
@@ -578,24 +463,16 @@
     // 长宽矩形去噪
     recRenderDataFilter(item, data, type, diffILen, diffJLen, continuityDiff) {
       const {
-        canvas,
+        width,
         imageData
       } = this.data.img
       let recRenderDataHandle = []
       let _sum = 0
-      // const diffILen = type === 'longRec' ? continuityDiff * 2 : continuityDiff
-      // const diffJLen = type === 'longRec' ? continuityDiff * canvas.width : continuityDiff * canvas.width * 2
-      // const continuityDiffSum = type === 'longRec' ? continuityDiff * 2 : continuityDiff * continuityDiff - 4
 
       item.recRenderData.map((__i, index) => {
         // if (index !== 4400) return
-        // TODO 80 为rec矩形宽
         for (let j = __i; j < __i + diffILen; j += 4) {
-          // 筛选长方形值
-          for (let z = j; z < j + diffJLen; z += 4 * canvas.width) {
-          // 筛选正方形值
-          // for (let z = j; z < j + continuityDiff * canvas.width; z += 4 * canvas.width) {
-            
+          for (let z = j; z < j + diffJLen; z += 4 * width) {
             if (data[z] === 255) {
               _sum++
               recRenderDataHandle.push(__i)
@@ -625,17 +502,13 @@
       })
     }
     // 数据匹配以及打点
-    posRender(diff = 30, txAlArr = [], colorAlArr = []) {
+    posRender(diff = this.data.img.posDiff, txAlArr = [], colorAlArr = []) {
       const {
         colorArr
       } = this.data.img
       const {
         textArr
       } = this.data.verImg
-
-      // console.log(colorArr, textArr)
-      
-      
 
       textArr.map(item => {
         // 若捕获值跟校验个数相同，则按大到小选中
@@ -652,12 +525,6 @@
               return true
             }
           })
-          // const obj = colorArr.find(items => {
-          //   if (colorAlArr.includes(items.key)) {
-          //     return
-          //   }
-            
-          // })
           return
         }
         if (txAlArr.includes(item.key)) {
@@ -687,9 +554,6 @@
       if (txAlArr.length < textArr.length) {
         this.posRender(diff + 30, txAlArr, colorAlArr)
       }
-      // if (colorArr[0]) {
-      //   this.posRender(diff + 30)
-      // }
     }
     // 计算color中出现最多的值
     colorMax(arr) {
@@ -729,9 +593,9 @@
     }
     textPix() {
       const {
-        num
+        num,
+        width
       } = this.data.verImg
-      const width = 116
       const mid = parseInt(width / 4 / 2) * 4
       let arr = []
       let sortArr = []
@@ -776,12 +640,11 @@
     checkNumber() {
       let {
         canvas,
+        width,
         ctx
       } = this.data.verImg
       let imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
       let data = imageData.data
-      const width = 116
-      const fine = 3
       const mid = parseInt(width / 4 / 2) * 4
 
       this.data.verImg.imageData = imageData
@@ -843,9 +706,9 @@
 
       for (let i = 0; i < data.length; i += 4) {
         let avg = (data[i] + data[i +1] + data[i + 2]) / 3;
-        data[i]     = avg; // red
-        data[i + 1] = avg; // green
-        data[i + 2] = avg; // blue
+        data[i]     = avg
+        data[i + 1] = avg
+        data[i + 2] = avg
       }
       this.data.img.ctx.putImageData(imageData, 0, 0)
     }
@@ -890,65 +753,8 @@
       }
     }
   }
-  // setTimeout(() => {
   new BilibiliOcr({
     url: './img/4.jpg'
   })
-  // }, 500)
-  // var img = new Image();
-  // img.crossOrigin = "Anonymous";
-  // img.src = './img/3.jpg';
-  // img.onload = function() {
-  //   draw(this);
-  // };
-  // function draw(img) {
-  //   var canvas = document.createElement('canvas')
-  //   var ctx = canvas.getContext('2d')
-  //   canvas.width = 344
-  //   canvas.height = 344
-  //   ctx.drawImage(img, 0, 0)
-  //   document.body.appendChild(canvas)
-
-  //   handle(canvas, ctx)
-  //   // img.style.display = 'none';
-  //   // var zoomctx = document.getElementById('zoom').getContext('2d');
-  
-  //   // var smoothbtn = document.getElementById('smoothbtn');
-  //   // var toggleSmoothing = function(event) {
-  //   //   zoomctx.imageSmoothingEnabled = this.checked;
-  //   //   zoomctx.mozImageSmoothingEnabled = this.checked;
-  //   //   zoomctx.webkitImageSmoothingEnabled = this.checked;
-  //   //   zoomctx.msImageSmoothingEnabled = this.checked;
-  //   // };
-  //   // smoothbtn.addEventListener('change', toggleSmoothing);
-  // }
-  // function handle(canvas, ctx) {
-  //   ctx.imageSmoothingEnabled = false
-  //   ctx.mozImageSmoothingEnabled = false
-  //   ctx.webkitImageSmoothingEnabled = false
-  //   ctx.msImageSmoothingEnabled = false
-    
-  //   var imageData = ctx.getImageData(0,0,canvas.width, canvas.height);
-  //   // invert(imageData.data)
-  //   grayscale(imageData.data)
-  //   ctx.putImageData(imageData, 0, 0);
-  // }
-  // var invert = function(data) {
-  //   for (var i = 0; i < data.length; i += 4) {
-  //     data[i]     = 255 - data[i];     // red
-  //     data[i + 1] = 255 - data[i + 1]; // green
-  //     data[i + 2] = 255 - data[i + 2]; // blue
-  //   }
-  // };
-
-  // var grayscale = function(data) {
-  //   for (var i = 0; i < data.length; i += 4) {
-  //     var avg = (data[i] + data[i +1] + data[i +2]) / 3;
-  //     data[i]     = avg; // red
-  //     data[i + 1] = avg; // green
-  //     data[i + 2] = avg; // blue
-  //   }
-  // };
-
 </script>
 </html>
