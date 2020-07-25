@@ -34,12 +34,15 @@
   <script>
     class BilibiliOcr {
       constructor(props) {
+        // props: url, el
         this.props = props;
         this.data = {
           img: {
+            primaryWidth: 324,
+            primaryHeight: 324,
             // width: 324,
             // height: 324,
-            width: 260,
+            width: 260, // 其实就是可视范围的宽，也可以在el中取宽，但还是先分开再说
             height: 260,
             countAvg: 90, // 对比值 - 差
             countStart: 2, // 对比起始值
@@ -125,7 +128,7 @@
           _this.data.verImg.canvas = canvas;
           _this.data.verImg.ctx = ctx;
 
-          document.body.appendChild(canvas);
+          // document.body.appendChild(canvas);
           _this.verImgHandle();
         };
       }
@@ -149,7 +152,7 @@
         this.imgInit();
       }
       imgInit() {
-        const { width, height } = this.data.img;
+        const { width, height, primaryWidth, primaryHeight } = this.data.img;
         const img = new Image();
         const _this = this;
 
@@ -161,7 +164,17 @@
           // canvas.width = 344
           canvas.width = width;
           canvas.height = height;
-          ctx.drawImage(this, 10, 10, width, height, 0, 0, width, height);
+          ctx.drawImage(
+            this,
+            10,
+            10,
+            primaryWidth,
+            primaryHeight,
+            0,
+            0,
+            width,
+            height
+          );
           // ctx.drawImage(this, 0, 0)
           // TODO 测试
           // canvas.width = 100
@@ -170,8 +183,7 @@
           _this.data.img.canvas = canvas;
           _this.data.img.ctx = ctx;
 
-          document.querySelector(".canvas").appendChild(canvas);
-          // document.body.appendChild(canvas)
+          // document.querySelector(".canvas").appendChild(canvas);
           _this.imgHandle();
         };
       }
@@ -565,15 +577,17 @@
                 dom.style.height = dom.style.width = pos.width + "px";
                 dom.style.left = items.x + "px";
                 dom.style.top = items.y + "px";
-                // dom.style.visibility = "hidden";
+                dom.style.visibility = "hidden";
                 dom.style.position = "absolute";
 
-                document.querySelector(".canvas").appendChild(dom);
+                this.props.el && this.props.el.appendChild(dom);
+                // document.querySelector(".canvas").appendChild(dom);
                 setTimeout(() => {
                   this.call.success(
                     item.key,
                     this.getOffsetLeft(dom) + pos.width / 2,
-                    this.getOffsetTop(dom) + pos.width / 2
+                    this.getOffsetTop(dom) + pos.width / 2,
+                    item.key === textArr.length - 1
                   );
                 }, item.key * 200);
                 txAlArr.push(item.key);
@@ -604,16 +618,18 @@
               dom.style.height = dom.style.width = pos.width + "px";
               dom.style.left = items.x + "px";
               dom.style.top = items.y + "px";
-              // dom.style.visibility = "hidden";
+              dom.style.visibility = "hidden";
               dom.style.position = "absolute";
 
               dom.innerText = item.key + 1;
-              document.querySelector(".canvas").appendChild(dom);
+              this.props.el && this.props.el.appendChild(dom);
+              // document.querySelector(".canvas").appendChild(dom);
               setTimeout(() => {
                 this.call.success(
                   item.key,
                   this.getOffsetLeft(dom) + pos.width / 2,
-                  this.getOffsetTop(dom) + pos.width / 2
+                  this.getOffsetTop(dom) + pos.width / 2,
+                  item.key === textArr.length - 1
                 );
               }, item.key * 200);
               txAlArr.push(item.key);
@@ -748,13 +764,15 @@
         let isL2 = this.isCheckThickness(mid + parseInt(width / 4) * 4, width);
         let isL3 = this.isCheckThickness(mid + (width / 2) * 4, width);
         let isL4 = this.isCheckThickness(mid * 3 + (width / 2) * 4, width);
+        // 处理特殊情况 - 居中线
+        let isL5 = this.isCheckThickness(mid * 2 + (width / 2) * 2, width);
 
         // 都碰到为4
         if (isL1 && isL2 && isL3 && isL4) {
           return 4;
         }
-        // 左边没擦到，第二根擦到为2
-        else if (!isL1 && isL2) {
+        // 左边没擦到，最右边没擦到
+        else if (!isL5) {
           return 2;
         }
         return 3;
@@ -779,12 +797,12 @@
               // return true
               // break
             }
-            // data[_i]     = 255; // red
+            // data[_i] = 255; // red
             // data[_i + 1] = 0; // green
             // data[_i + 2] = 0; // blue
           }
         }
-        // this.data.verImg.ctx.putImageData(imageData, 0, 0)
+        this.data.verImg.ctx.putImageData(imageData, 0, 0);
         if (isSum) {
           return sum * 3;
         }
@@ -865,16 +883,89 @@
         }
       }
     }
+
     const Ocr = new BilibiliOcr({
-      url: "./img/4.jpg"
+      url: "./img/1.jpg",
+      el: document.querySelector(".canvas")
     });
     // 返回的是屏幕坐标
-    Ocr.on("success", (key, x, y) => {
+    Ocr.on("success", (key, x, y, isEnd) => {
       console.log(key, x, y);
-      document.elementFromPoint(x, y).click();
     });
     Ocr.on("fail", () => {
       console.log("fail");
     });
+
+    // b站自动执行脚本
+    const autoBilibiliOcr = () => {
+      setTimeout(() => {
+        // 重置 - 尝试次数过多
+        if (
+          document.querySelector(".geetest_panel_error").style.display !==
+          "none"
+        ) {
+          document.querySelector(".geetest_panel_error_content").click();
+          autoBilibiliOcr();
+          return;
+        }
+
+        // 成功
+        if (
+          document.querySelector(".geetest_panel_next").style.display === "none"
+        ) {
+          return;
+        }
+        var Ocr = new BilibiliOcr({
+          url: document.querySelector(".geetest_item_img").src,
+          el: document.querySelector(".geetest_item_wrap")
+        });
+        // 返回的是屏幕坐标
+        Ocr.on("success", (key, x, y, isEnd) => {
+          console.log(key, x, y);
+          var evt = document.createEvent("MouseEvents");
+
+          evt.initMouseEvent(
+            "click",
+            true,
+            false,
+            null,
+            0,
+            0,
+            0,
+            x - 135,
+            y - 180,
+            false,
+            false,
+            false,
+            false,
+            0,
+            null
+          );
+          document.querySelector(".geetest_item_wrap").dispatchEvent(evt);
+          if (isEnd) {
+            document.querySelector(".geetest_commit").click();
+            setTimeout(() => {
+              // 重置 - 等待fail状态结束
+              if (
+                document.querySelector(
+                  ".geetest_result_tip.geetest_up.geetest_fail"
+                )
+              ) {
+                setTimeout(() => {
+                  autoBilibiliOcr();
+                }, 1500 + parseInt(Math.random() * 1000));
+                return;
+              }
+            }, 500);
+          }
+        });
+        Ocr.on("fail", () => {
+          // 重置
+          document.querySelector(".geetest_refresh").click();
+          console.log("fail");
+          autoBilibiliOcr();
+        });
+      }, 800 + parseInt(Math.random() * 1000));
+    };
   </script>
 </html>
