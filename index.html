@@ -1,760 +1,880 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="X-UA-Compatible" content="ie=edge">
-  <title>BilibiliOcr</title>
-  <style>
-    .canvas {
-      position: relative;
-      height: 260px;
-      width: 260px;
-    }
-    .pos {
-      color: white;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      position: absolute;
-      height: 25px;
-      width: 25px;
-      border: 3px solid white;
-      border-radius: 50%;
-      background-color: #539ffe;
-      box-sizing: border-box;
-      box-shadow: 0 0 10px black;
-    }
-  </style>
-</head>
-<body>
-  <div class="canvas"></div>
-  <!-- <img src="https://static.geetest.com/nerualpic/word_l1_zh_2020.03.16/harley1/2cbacc3068dbde3905fa848726eab3d2.jpg" alt=""> -->
-</body>
-<script>
-  
-  class BilibiliOcr {
-    constructor(props) {
-      this.props = props
-      this.data = {
-        img: {
-          // width: 324,
-          // height: 324,
-          width: 260,
-          height: 260,
-          countAvg: 90, // 对比值 - 差
-          countStart: 2, // 对比起始值
-          countEnd: 20, // 结束值 --- 超出则算是背景图
-          recWidth: 50, // 锁定盒子宽度(越小盒子越多) - 该值修改可能recHandle内部也要微调
-          bigDataMax: 7000, // 像素点超出不计算
-          dupImpurityValue: 200, // 去除范围杂质(数值以内的矩形不考虑)保证个数到校验的数量含以上
-          recWidthAgain: 80, // 第二次锁定盒子宽度，扩大选取范围 - 该值修改可能recRender内部也要微调
-          diff: 60, // 计算像素点可包含的容差值
-          continuityDiff: 15, // 二次过滤像素点容差值 - 该值修改可能recRenderDataFilter内部也要微调
-          posDiff: 30, // 选中矩形与字符进行像素点比较值，若没有则会递归变大
-          canvas: '',
-          ctx: '',
-          // 1296 为下一个起始列值
-          // nextCol: 1296,
-          // 被选中的点位
-          bigData: [],
-          // data数值
-          imageData: {},
-          // 原始数据
-          oldImageData: {},
-          // 被选中的矩形方阵数据
-          recData: [],
-          // 被选中的矩形方阵数据 - 转换为颜色 - 渲染就绪
-          colorArr: []
-        },
-        verImg: {
-          width: 116,
-          height: 40,
-          canvas: '',
-          ctx: '',
-          imageData: {},
-          // 几个字
-          num: 0,
-          // 字数数据
-          textArr: []
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="X-UA-Compatible" content="ie=edge" />
+    <title>BilibiliOcr</title>
+    <style>
+      .canvas {
+        position: relative;
+        /* height: 260px;
+        width: 260px; */
+      }
+      .pos {
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        /* position: absolute; */
+        /* height: 25px;
+        width: 25px; */
+        border: 3px solid white;
+        border-radius: 50%;
+        background-color: #539ffe;
+        box-sizing: border-box;
+        box-shadow: 0 0 10px black;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="canvas"></div>
+    <!-- <img src="https://static.geetest.com/nerualpic/word_l1_zh_2020.03.16/harley1/2cbacc3068dbde3905fa848726eab3d2.jpg" alt=""> -->
+  </body>
+  <script>
+    class BilibiliOcr {
+      constructor(props) {
+        this.props = props;
+        this.data = {
+          img: {
+            // width: 324,
+            // height: 324,
+            width: 260,
+            height: 260,
+            countAvg: 90, // 对比值 - 差
+            countStart: 2, // 对比起始值
+            countEnd: 20, // 结束值 --- 超出则算是背景图
+            recWidth: 50, // 锁定盒子宽度(越小盒子越多) - 该值修改可能recHandle内部也要微调
+            bigDataMax: 7000, // 像素点超出不计算
+            dupImpurityValue: 200, // 去除范围杂质(数值以内的矩形不考虑)保证个数到校验的数量含以上
+            recWidthAgain: 80, // 第二次锁定盒子宽度，扩大选取范围 - 该值修改可能recRender内部也要微调
+            diff: 60, // 计算像素点可包含的容差值
+            continuityDiff: 15, // 二次过滤像素点容差值 - 该值修改可能recRenderDataFilter内部也要微调
+            posDiff: 30, // 选中矩形与字符进行像素点比较值，若没有则会递归变大
+            canvas: "",
+            ctx: "",
+            // 1296 为下一个起始列值
+            // nextCol: 1296,
+            // 被选中的点位
+            bigData: [],
+            // data数值
+            imageData: {},
+            // 原始数据
+            oldImageData: {},
+            // 被选中的矩形方阵数据
+            recData: [],
+            // 被选中的矩形方阵数据 - 转换为颜色 - 渲染就绪
+            colorArr: [],
+            ...props.imm
+          },
+          verImg: {
+            width: 116,
+            height: 40,
+            // 验证码跟图是在一块的，则x、y是从该图的坐标开始截取
+            verImgX: 0,
+            verImgY: 344,
+            canvas: "",
+            ctx: "",
+            imageData: {},
+            // 几个字
+            num: 0,
+            // 字数数据
+            textArr: [],
+            ...props.verImg
+          },
+          pos: {
+            width: 25
+            // height: "25px",
+            // position: "absolute"
+          }
+        };
+        this.call = {
+          success: () => {},
+          fail: () => {}
+        };
+        this.init();
+      }
+      init() {
+        this.verImgInit();
+        // this.imgInit()
+      }
+      verImgInit() {
+        const img = new Image();
+        const _this = this;
+        let { canvas, ctx, width, height, verImgX, verImgY } = this.data.verImg;
+
+        img.crossOrigin = "Anonymous";
+        img.src = this.props.url;
+        img.onload = function() {
+          canvas = document.createElement("canvas");
+          ctx = canvas.getContext("2d");
+          canvas.width = width;
+          canvas.height = height;
+          ctx.drawImage(
+            this,
+            verImgX,
+            verImgY,
+            width,
+            height,
+            0,
+            0,
+            width,
+            height
+          );
+
+          _this.data.verImg.canvas = canvas;
+          _this.data.verImg.ctx = ctx;
+
+          document.body.appendChild(canvas);
+          _this.verImgHandle();
+        };
+      }
+      verImgHandle() {
+        // 检查几个字
+        const num = this.checkNumber();
+        this.data.verImg.num = num;
+        console.log("当前字个数为：", num);
+        // 不光是这边退出，textPix也没做4个字的分割处理
+        if (num > 3) {
+          console.warn("识别数字大于3，跳过");
+          this.call.fail();
+          return;
         }
+        // 计算像素点
+        const arr = this.textPix();
+        console.log("校验字体像素点为：", arr);
+        // arr.map(item => console.log(`第${item.key}个像素点为`, item.val))
+        this.data.verImg.textArr = arr;
+        // 初始化图片
+        this.imgInit();
       }
-      this.init()
-    }
-    init () {
-      this.verImgInit()
-      // this.imgInit()
-    }
-    verImgInit() {
-      const img = new Image()
-      const _this = this
-      let {
-        canvas,
-        ctx,
-        width,
-        height
-      } = this.data.verImg
+      imgInit() {
+        const { width, height } = this.data.img;
+        const img = new Image();
+        const _this = this;
 
-      img.crossOrigin = "Anonymous"
-      img.src = this.props.url
-      img.onload = function () {
-        canvas = document.createElement('canvas')
-        ctx = canvas.getContext('2d')
-        canvas.width = width
-        canvas.height = height
-        ctx.drawImage(this, 0, 344, width, height, 0, 0, width, height)
-        
-        _this.data.verImg.canvas = canvas
-        _this.data.verImg.ctx = ctx
+        img.crossOrigin = "Anonymous";
+        img.src = this.props.url;
+        img.onload = function() {
+          const canvas = document.createElement("canvas");
+          const ctx = canvas.getContext("2d");
+          // canvas.width = 344
+          canvas.width = width;
+          canvas.height = height;
+          ctx.drawImage(this, 10, 10, width, height, 0, 0, width, height);
+          // ctx.drawImage(this, 0, 0)
+          // TODO 测试
+          // canvas.width = 100
+          // canvas.height = 100
+          // ctx.drawImage(this, 60, 195, 100, 100, 0, 0, 100, 100)
+          _this.data.img.canvas = canvas;
+          _this.data.img.ctx = ctx;
 
-        document.body.appendChild(canvas)
-        _this.verImgHandle()
+          document.querySelector(".canvas").appendChild(canvas);
+          // document.body.appendChild(canvas)
+          _this.imgHandle();
+        };
       }
-    }
-    verImgHandle() {
-      // 检查几个字
-      const num = this.checkNumber()
-      this.data.verImg.num = num
-      console.log('当前字个数为：', num)
-      // 不光是这边退出，textPix也没做4个字的分割处理
-      if (num > 3) {
-        console.warn('识别数字大于3，跳过')
-        return
+      imgHandle() {
+        let { width, height, ctx } = this.data.img;
+
+        this.data.img.imageData = ctx.getImageData(0, 0, width, height);
+        this.data.img.oldImageData = JSON.parse(
+          JSON.stringify(this.data.img.imageData)
+        );
+
+        // 置灰
+        this.grayscale();
+        // 初步捕获对比度
+        this.pixels();
+        // 矩形降噪
+        this.recHandle();
+        // 矩形渲染
+        this.recRender();
+        // 重置像素点 - 会影响效果 注释吧
+        // this.rezCanvas()
+        // 计算像素点 - 及计算区域中的高频反差像素
+        this.computePix();
+        // 打点
+        this.posRender();
+      }
+      pixels() {
+        const { imageData, countAvg, countStart, countEnd } = this.data.img;
+        // 100 * 100 * 4 = 40000 像素点
+        // 100 * 1 * 4 = 400
+        // 前后对比值 突然超过 90 且 超过后在 > 2 < 10 个像素点内 比开始的对比值高 即可，若超过10个像素仍然很高，则放弃
+        const _this = this;
+        let data = imageData.data;
+        let preVal,
+          nowVal,
+          isBig,
+          bigCount = 0,
+          bigData = [];
+        for (let i = 0, j = 0; i < data.length; i += 4, j += 4) {
+          if (!preVal) {
+            preVal = data[i];
+            // 当前无值，则跳过第一次
+            if (!nowVal) {
+              continue;
+            }
+          }
+          nowVal = data[i];
+
+          if (Math.abs(preVal - nowVal) > countAvg && bigCount < countEnd) {
+            bigCount++;
+            bigData.push(i);
+          } else {
+            bigCount = 0;
+            bigData = [];
+            preVal = data[i];
+          }
+
+          if (bigCount > countStart && bigCount < countEnd) {
+            for (let _i = 0; _i < bigData.length; _i++) {
+              data[bigData[_i]] = 0;
+              data[bigData[_i] + 1] = 255;
+              data[bigData[_i] + 2] = 0;
+              _this.data.img.bigData.push(bigData[_i]);
+            }
+            bigData = [];
+          }
+        }
+        this.data.img.ctx.putImageData(imageData, 0, 0);
+      }
+      // 矩形去噪 - 盒子宽度
+      recHandle(recWidth = this.data.img.recWidth) {
+        const {
+          imageData,
+          width,
+          bigDataMax,
+          dupImpurityValue
+        } = this.data.img;
+        const nextCol = width * 4;
+        let data = imageData.data;
+        let bigData = this.data.img.bigData;
+        let newBigData = [];
+        // 盒子统计数据
+        let recData = [];
+        let recDataAvg;
+
+        if (bigData.length > bigDataMax) {
+          console.warn(
+            `捕获到超出${bigDataMax}的像素点，过于复杂不计算`,
+            bigData.length
+          );
+          this.call.fail();
+          return;
+        }
+        if (!bigData.length) {
+          console.warn("无像素点捕获，退出");
+          this.call.fail();
+          return;
+        }
+        // console.log("%c" + this.data.img.bigData, "color: green")
+        // TODO 可以修改i值调试位置
+        for (let i = 0; i < bigData.length; i++) {
+          // 列
+          let line =
+            bigData[i] - parseInt(recWidth / 2) * (nextCol - recWidth * 4);
+          // let line = bigData[i]
+
+          // 防止突破顶端
+          if (line <= 0) {
+            line = bigData[i] - parseInt(recWidth / 2) * 4;
+          }
+          // 防止突破左端
+          if (nextCol - (line % nextCol) <= recWidth * 4) {
+            line += recWidth * 4 - (nextCol - (line % nextCol));
+          }
+          // 防止突破右端
+          if (nextCol - (line % nextCol) <= recWidth * 4) {
+            line -= recWidth * 4 - (nextCol - (line % nextCol));
+          }
+
+          recData.push({
+            data: [],
+            val: 0,
+            bigDataKey: i,
+            sum: 0
+          });
+
+          for (let j = 0; j < recWidth; j++) {
+            // 行
+            let j_s = line + j * nextCol;
+            let j_e = line + j * nextCol + recWidth * 4;
+
+            for (let z = j_s; z < j_e; z += 4) {
+              if (data[z + 1] === 255) {
+                recData[i].data.push(z);
+                recData[i].sum++;
+              }
+            }
+          }
+          // recData[i].val = bigData[i]
+          recData[i].val = line;
+        }
+        // 升序
+        recData = recData.sort(this.compare("sum"));
+
+        // 综合去重
+        recData = this.dupRemoval(recData);
+
+        // 去除范围杂质
+        recData = this.dupImpurity(recData, dupImpurityValue);
+
+        // recDataAvg = (recData[0].sum + recData[recData.length - 1].sum) / 2
+        console.log("一共点数：", bigData.length);
+        console.log("降噪后值，取前六名：", recData);
+        // console.log('平均值：', recDataAvg)
+
+        recData.map(item => {
+          item.data.map(items => {
+            data[items] = 255;
+            data[items + 1] = 0;
+            data[items + 2] = 0;
+            newBigData.push(items);
+          });
+        });
+
+        this.data.img.ctx.putImageData(imageData, 0, 0);
+
+        this.data.img.recData = recData;
+        this.data.img.bigData = newBigData;
+        console.log("捕获点数：", newBigData.length);
+      }
+      // 矩形填充
+      recRender(recWidth = this.data.img.recWidthAgain) {
+        const {
+          bigData,
+          width,
+          recData,
+          imageData,
+          ctx,
+          canvas
+        } = this.data.img;
+        const nextCol = width * 4;
+        let data = imageData.data;
+        // let len = recData.length > 6 ? 6 : recData.length
+        let recRenderData = [];
+
+        for (let i = 0; i < recData.length; i++) {
+          // 15 是 (recWidth - 50 / 2)
+          let line = recData[i].val - 15 * nextCol - 15 * 4;
+
+          if (line < 0) {
+            line = recData[i].val;
+          }
+          recData[i].recRenderData = [];
+          for (let j = 0; j < recWidth; j++) {
+            // 行
+            let j_s = line + j * nextCol;
+            let j_e = line + j * nextCol + recWidth * 4;
+
+            for (let z = j_s; z < j_e; z += 4) {
+              // TODO 测试矩形位置
+              // data[z] = 0
+              // data[z + 1] = 0
+              // data[z + 2] = 255
+              data[z + 3] = 100;
+              recData[i].recRenderData.push(z);
+            }
+          }
+        }
+        this.data.img.ctx.putImageData(imageData, 0, 0);
+      }
+      // 还原canvas
+      rezCanvas() {
+        const { imageData, oldImageData } = this.data.img;
+        let data = imageData.data;
+        let oldData = oldImageData.data;
+
+        for (let i = 0; i < data.length; i += 4) {
+          data[i] = oldData[i]; // red
+          data[i + 1] = oldData[i + 1]; // green
+          data[i + 2] = oldData[i + 2]; // blue
+        }
+        this.data.img.ctx.putImageData(imageData, 0, 0);
       }
       // 计算像素点
-      const arr = this.textPix()
-      console.log('校验字体像素点为：', arr)
-      // arr.map(item => console.log(`第${item.key}个像素点为`, item.val))
-      this.data.verImg.textArr = arr
-      // 初始化图片
-      this.imgInit()
-    }
-    imgInit() {
-      const {
-        width,
-        height,
-      } = this.data.img
-      const img = new Image()
-      const _this = this
-      
-      img.crossOrigin = "Anonymous"
-      img.src = this.props.url
-      img.onload = function () {
-        const canvas = document.createElement('canvas')
-        const ctx = canvas.getContext('2d')
-        // canvas.width = 344
-        canvas.width = width
-        canvas.height = height
-        ctx.drawImage(this, 10, 10, width, height, 0, 0, width, height)
-        // ctx.drawImage(this, 0, 0)
-        // TODO 测试
-        // canvas.width = 100
-        // canvas.height = 100
-        // ctx.drawImage(this, 60, 195, 100, 100, 0, 0, 100, 100)
-        _this.data.img.canvas = canvas
-        _this.data.img.ctx = ctx
-        
-        document.querySelector('.canvas').appendChild(canvas)
-        // document.body.appendChild(canvas)
-        _this.imgHandle()
-      }
-    }
-    imgHandle() {
-      let {
-        width,
-        height,
-        ctx,
-      } = this.data.img
+      computePix() {
+        const {
+          recData,
+          imageData,
+          diff,
+          width,
+          height,
+          continuityDiff
+        } = this.data.img;
+        // TODO 容差值
+        let data = imageData.data;
+        let colorArr = [];
+        let sortArr = [];
 
-      this.data.img.imageData = ctx.getImageData(0, 0, width, height)
-      this.data.img.oldImageData = JSON.parse(JSON.stringify(this.data.img.imageData))
+        // 转换像素点，重组数组
+        recData.map((item, i) => {
+          colorArr.push({
+            key: i,
+            data: [],
+            colorMax: 0,
+            recRenderData: item.recRenderData,
+            sum: 0,
+            x: 0,
+            y: 0,
+            xyCenter: 0,
+            chooseNo: 0
+          });
+          item.data.map(val => {
+            colorArr[i].data.push(data[val]);
+          });
+          colorArr[i].colorMax = this.colorMax(colorArr[i].data);
+        });
 
-      // 置灰
-      this.grayscale()
-      // 初步捕获对比度
-      this.pixels()
-      // 矩形降噪
-      this.recHandle()
-      // 矩形渲染
-      this.recRender()
-      // 重置像素点 - 会影响效果 注释吧
-      // this.rezCanvas()
-      // 计算像素点 - 及计算区域中的高频反差像素
-      this.computePix()
-      // 打点
-      this.posRender()
+        colorArr.map((item, _i) => {
+          // if (_i > 0) return
+          item.recRenderData.map(i => {
+            if (Math.abs(data[i] - item.colorMax) < diff) {
+              item.sum++;
+              data[i] = 255;
+              data[i + 1] = 0;
+              data[i + 2] = 0;
+              // data[i + 3] = 0
+            }
+          });
+          // 矩形去噪 --- 是否要从 大 到小 递归下continuityDiff值？因为有些图去不掉
+          // 还有各种 纵横长方形的东西 - 长，高，diff值
+          this.recRenderDataFilter(
+            item,
+            data,
+            "longRec",
+            continuityDiff * 4,
+            continuityDiff * width,
+            continuityDiff
+          );
+          this.recRenderDataFilter(
+            item,
+            data,
+            "heightRec",
+            continuityDiff,
+            continuityDiff * width * 2 * 2,
+            continuityDiff
+          );
 
-    }
-    pixels() {
-      const {
-        imageData,
-        countAvg,
-        countStart,
-        countEnd,
-      } = this.data.img
-      // 100 * 100 * 4 = 40000 像素点
-      // 100 * 1 * 4 = 400
-      // 前后对比值 突然超过 90 且 超过后在 > 2 < 10 个像素点内 比开始的对比值高 即可，若超过10个像素仍然很高，则放弃
-      const _this = this
-      let data = imageData.data
-      let preVal, nowVal, isBig, bigCount = 0, bigData = []
-      for (let i = 0, j = 0; i < data.length; i += 4, j += 4) {
-        if (!preVal) {
-          preVal = data[i]
-          // 当前无值，则跳过第一次
-          if (!nowVal) {
-            continue
+          // 计算居中值 - 不是取值的居中数而是取数组的中间数
+          // 矩形像素点为偶数
+          if (item.recRenderData.length % 2 === 0) {
+            // 列数 + 行数 = 居中数
+            item.xyCenter =
+              item.recRenderData[
+                item.recRenderData.length / 2 +
+                  Math.sqrt(item.recRenderData.length) / 2
+              ];
+          } else {
+            // 奇数
+            item.xyCenter =
+              item.recRenderData[parseInt(item.recRenderData.length / 2)];
           }
-        }
-        nowVal = data[i]
-        
-        if (Math.abs(preVal - nowVal) > countAvg && bigCount < countEnd) {
-          bigCount++
-          bigData.push(i)
-        } else {
-          bigCount = 0
-          bigData = []
-          preVal = data[i]
-        }
 
-        if (bigCount > countStart && bigCount < countEnd) {
-          for (let _i = 0; _i < bigData.length; _i++) {
-            data[bigData[_i]] = 0
-            data[bigData[_i] + 1] = 255
-            data[bigData[_i] + 2] = 0
-            _this.data.img.bigData.push(bigData[_i])
-          }
-          bigData = []
-        }
-
+          // 计算坐标
+          item.x = ((item.xyCenter / 4) % width) - 10;
+          item.y = (item.xyCenter / 4 - item.x) / width - 10;
+        });
+        // 添加排序字段
+        sortArr = JSON.parse(JSON.stringify(colorArr)).sort(
+          this.compare("sum")
+        );
+        sortArr.map((item, i) => {
+          colorArr.find(items => {
+            if (item.key === items.key) {
+              items.chooseNo = i;
+              return true;
+            }
+          });
+        });
+        this.data.img.ctx.putImageData(imageData, 0, 0);
+        this.data.img.colorArr = colorArr;
+        console.log(colorArr);
       }
-      this.data.img.ctx.putImageData(imageData, 0, 0)
-    }
-    // 矩形去噪 - 盒子宽度
-    recHandle(recWidth = this.data.img.recWidth) {
-      const {
-        imageData,
-        width,
-        bigDataMax,
-        dupImpurityValue
-      } = this.data.img
-      const nextCol = width * 4
-      let data = imageData.data
-      let bigData = this.data.img.bigData
-      let newBigData = []
-      // 盒子统计数据
-      let recData = []
-      let recDataAvg
+      // 长宽矩形去噪
+      recRenderDataFilter(
+        item,
+        data,
+        type,
+        diffILen,
+        diffJLen,
+        continuityDiff
+      ) {
+        const { width, imageData } = this.data.img;
+        let recRenderDataHandle = [];
+        let _sum = 0;
 
-      if (bigData.length > bigDataMax) {
-        console.warn(`捕获到超出${bigDataMax}的像素点，过于复杂不计算`, bigData.length)
-        return
-      }
-      if (!bigData.length) {
-        console.warn('无像素点捕获，退出')
-        return
-      }
-      // console.log("%c" + this.data.img.bigData, "color: green")
-      // TODO 可以修改i值调试位置
-      for (let i = 0; i < bigData.length; i++) {
-        // 列
-        let line = bigData[i] - parseInt(recWidth / 2) * (nextCol - recWidth * 4)
-        // let line = bigData[i]
-
-        // 防止突破顶端
-        if (line <= 0) {
-          line = bigData[i] - parseInt(recWidth / 2) * 4
-        }
-        // 防止突破左端
-        if (nextCol - line % nextCol <= recWidth * 4) {
-          line += recWidth * 4 - (nextCol - line % nextCol)
-        }
-        // 防止突破右端
-        if (nextCol - line % nextCol <= recWidth * 4) {
-          line -= recWidth * 4 - (nextCol - line % nextCol)
-        }
-
-        recData.push({
-          data: [],
-          val: 0,
-          bigDataKey: i,
-          sum: 0,
-        })
-
-        for (let j = 0; j < recWidth; j++) {
-          // 行
-          let j_s = line + j * nextCol
-          let j_e = line + j * nextCol + recWidth * 4
-
-          for (let z = j_s; z < j_e; z += 4) {
-            if (data[z + 1] === 255) {
-              recData[i].data.push(z)
-              recData[i].sum++
+        item.recRenderData.map((__i, index) => {
+          // if (index !== 4400) return
+          for (let j = __i; j < __i + diffILen; j += 4) {
+            for (let z = j; z < j + diffJLen; z += 4 * width) {
+              if (data[z] === 255) {
+                _sum++;
+                recRenderDataHandle.push(__i);
+                // data[z]     = 0
+                // data[z + 1] = 255
+                // data[z + 2] = 0
+              } else {
+                _sum = 0;
+                recRenderDataHandle = [];
+                break;
+              }
             }
           }
+          // console.log(_sum)
+          if (_sum >= continuityDiff * 6) {
+            recRenderDataHandle.map(___i => {
+              data[___i] = 0;
+              data[___i + 1] = 255;
+              data[___i + 2] = 0;
+              // data[___i + 3] = 255
+            });
+            item.sum--;
+            _sum = 0;
+            recRenderDataHandle = [];
+          }
+        });
+      }
+      // 数据匹配以及打点
+      posRender(diff = this.data.img.posDiff, txAlArr = [], colorAlArr = []) {
+        const { colorArr } = this.data.img;
+        const { textArr } = this.data.verImg;
+        const pos = this.data.pos;
+
+        textArr.map(item => {
+          // 若捕获值跟校验个数相同，则按大到小选中
+          if (textArr.length === colorArr.length) {
+            colorArr.find(items => {
+              if (items.chooseNo === item.chooseNo) {
+                const dom = document.createElement("div");
+                dom.className = "pos";
+                // dom.style.left = items.x + "px";
+                // dom.style.top = items.y + "px";
+                dom.innerText = item.key + 1;
+                // dom.style.visibility = "hidden";
+                // dom.style = {
+                //   ...dom.style,
+                //   ...pos,
+                //   visibility: "hidden",
+                //   left: items.x + "px",
+                //   top: items.y + "px"
+                // };
+                dom.style.height = dom.style.width = pos.width + "px";
+                dom.style.left = items.x + "px";
+                dom.style.top = items.y + "px";
+                // dom.style.visibility = "hidden";
+                dom.style.position = "absolute";
+
+                document.querySelector(".canvas").appendChild(dom);
+                setTimeout(() => {
+                  this.call.success(
+                    item.key,
+                    this.getOffsetLeft(dom) + pos.width / 2,
+                    this.getOffsetTop(dom) + pos.width / 2
+                  );
+                }, item.key * 200);
+                txAlArr.push(item.key);
+                return true;
+              }
+            });
+            return;
+          }
+          if (txAlArr.includes(item.key)) {
+            return;
+          }
+          // 若捕获数不相同（其实只可能比字数多，前面已经做校验了），则按照像素点临近的去匹配
+          colorArr.find(items => {
+            if (colorAlArr.includes(items.key)) {
+              return;
+            }
+            if (Math.abs(items.sum - item.val) < diff) {
+              // TODO 这里是模拟渲染，正式脚本环境请转换为模拟点击图片
+              const dom = document.createElement("div");
+              dom.className = "pos";
+              // dom.style = {
+              //   ...dom.style,
+              //   ...pos,
+              //   visibility: "hidden",
+              //   left: items.x + "px",
+              //   top: items.y + "px"
+              // };
+              dom.style.height = dom.style.width = pos.width + "px";
+              dom.style.left = items.x + "px";
+              dom.style.top = items.y + "px";
+              // dom.style.visibility = "hidden";
+              dom.style.position = "absolute";
+
+              dom.innerText = item.key + 1;
+              document.querySelector(".canvas").appendChild(dom);
+              setTimeout(() => {
+                this.call.success(
+                  item.key,
+                  this.getOffsetLeft(dom) + pos.width / 2,
+                  this.getOffsetTop(dom) + pos.width / 2
+                );
+              }, item.key * 200);
+              txAlArr.push(item.key);
+              colorAlArr.push(items.key);
+              return true;
+            }
+          });
+        });
+        // debugger
+        // 若最相近的点位找不到，则扩大diff值递归
+        if (txAlArr.length < textArr.length) {
+          this.posRender(diff + 30, txAlArr, colorAlArr);
         }
-        // recData[i].val = bigData[i]
-        recData[i].val = line
+      }
+      // 计算color中出现最多的值
+      colorMax(arr) {
+        let data = {};
+        let newArr = [];
+        // 累积
+        arr.map(val => {
+          if (data[val + ""] >= 0) {
+            data[val + ""]++;
+            return;
+          }
+          data[val + ""] = 0;
+        });
+        let max = {
+          key: 0,
+          val: 0
+        };
+        newArr = Object.keys(data);
+        // 超过10个像素点才可进行分割
+        if (newArr.length > 10) {
+          for (let i = 0; i < newArr.length / 2; i++) {
+            delete data[newArr[i]];
+          }
+        }
+        // 比较
+        Object.keys(data).map(key => {
+          if (data[key] > max.val) {
+            max = {
+              key,
+              val: data[key]
+            };
+          }
+        });
+        // console.log('color中出现最多的值', max)
+
+        return max.key;
+      }
+      textPix() {
+        const { num, width } = this.data.verImg;
+        const mid = parseInt(width / 4 / 2) * 4;
+        let arr = [];
+        let sortArr = [];
+
+        if (num === 3) {
+          arr.push(
+            {
+              key: 0,
+              val: this.isCheckThickness(
+                mid + parseInt(width / 4) * 4 - 4,
+                width,
+                mid + parseInt(width / 4) * 4,
+                true
+              )
+            },
+            {
+              key: 1,
+              val: this.isCheckThickness(
+                mid + (width / 2) * 4,
+                width,
+                width,
+                true
+              )
+            },
+            {
+              key: 2,
+              val: this.isCheckThickness(
+                width * 4 - 4,
+                width,
+                mid + parseInt(width / 4) * 4,
+                true
+              )
+            }
+          );
+        } else {
+          // 2字
+          arr.push(
+            {
+              key: 0,
+              val: this.isCheckThickness(
+                parseInt(width / 2) * 4 - 4,
+                width,
+                parseInt(width / 2) * 4,
+                true
+              )
+            },
+            {
+              key: 1,
+              val: this.isCheckThickness(
+                width * 4 - 4,
+                width,
+                parseInt(width / 2) * 4,
+                true
+              )
+            }
+          );
+        }
+        // 添加值排序字段(不改变当前顺序)
+        // TODO
+        sortArr = JSON.parse(JSON.stringify(arr)).sort(this.compare("val"));
+        sortArr.map((item, i) => {
+          arr.find(items => {
+            if (item.key === items.key) {
+              items.chooseNo = i;
+              return true;
+            }
+          });
+        });
+        return arr;
+      }
+      checkNumber() {
+        let { canvas, width, ctx } = this.data.verImg;
+        let imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        let data = imageData.data;
+        const mid = parseInt(width / 4 / 2) * 4;
+
+        this.data.verImg.imageData = imageData;
+        // 测试左侧是否有值
+        let isL1 = this.isCheckThickness(mid, width);
+        let isL2 = this.isCheckThickness(mid + parseInt(width / 4) * 4, width);
+        let isL3 = this.isCheckThickness(mid + (width / 2) * 4, width);
+        let isL4 = this.isCheckThickness(mid * 3 + (width / 2) * 4, width);
+
+        // 都碰到为4
+        if (isL1 && isL2 && isL3 && isL4) {
+          return 4;
+        }
+        // 左边没擦到，第二根擦到为2
+        else if (!isL1 && isL2) {
+          return 2;
+        }
+        return 3;
+      }
+      // 检测个数
+      isCheckThickness(mid, width, fine = 3, isSum = false) {
+        let { imageData } = this.data.verImg;
+        const data = imageData.data;
+        let isTrue = false;
+        let sum = 0;
+
+        for (let i = mid; i < data.length; i += width * 4) {
+          for (let j = 0; j < fine; j += 4) {
+            let _i = i - j;
+
+            if (data[_i] < 200) {
+              if (isSum) {
+                sum++;
+              } else {
+                return true;
+              }
+              // return true
+              // break
+            }
+            // data[_i]     = 255; // red
+            // data[_i + 1] = 0; // green
+            // data[_i + 2] = 0; // blue
+          }
+        }
+        // this.data.verImg.ctx.putImageData(imageData, 0, 0)
+        if (isSum) {
+          return sum * 3;
+        }
+        return isTrue;
+      }
+      // 置灰
+      grayscale() {
+        const { imageData } = this.data.img;
+        let data = imageData.data;
+
+        for (let i = 0; i < data.length; i += 4) {
+          let avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
+          data[i] = avg;
+          data[i + 1] = avg;
+          data[i + 2] = avg;
+        }
+        this.data.img.ctx.putImageData(imageData, 0, 0);
+      }
+      // 综合去重
+      dupRemoval(data) {
+        let dupArr = [];
+        return data.map(item => {
+          let newItem = [];
+          item.data.map(val => {
+            if (!dupArr.includes(val)) {
+              dupArr.push(val);
+              newItem.push(val);
+            } else {
+              item.sum--;
+            }
+          });
+          return {
+            ...item,
+            data: newItem
+          };
+        });
+      }
+      // 去杂质 --- 递归直到算到符合校验的个数
+      dupImpurity(data, val) {
+        const { num } = this.data.verImg;
+        let newData = [];
+
+        data.map(item => item.sum >= val && newData.push(item));
+        if (newData.length < num) {
+          return this.dupImpurity(data, val - 10);
+        }
+        return newData;
       }
       // 升序
-      recData = recData.sort(this.compare('sum'))
-
-      // 综合去重
-      recData = this.dupRemoval(recData)
-
-      // 去除范围杂质
-      recData = this.dupImpurity(recData, dupImpurityValue)
-
-      // recDataAvg = (recData[0].sum + recData[recData.length - 1].sum) / 2
-      console.log('一共点数：', bigData.length)
-      console.log('降噪后值，取前六名：', recData)
-      // console.log('平均值：', recDataAvg)
-
-      recData.map(item => {
-        item.data.map(items => {
-          data[items] = 255
-          data[items + 1] = 0
-          data[items + 2] = 0
-          newBigData.push(items)
-        })
-      })
-
-      this.data.img.ctx.putImageData(imageData, 0, 0)
-
-      this.data.img.recData = recData
-      this.data.img.bigData = newBigData
-      console.log('捕获点数：', newBigData.length)
-    }
-    // 矩形填充
-    recRender(recWidth = this.data.img.recWidthAgain) {
-      const {
-        bigData,
-        width,
-        recData,
-        imageData,
-        ctx,
-        canvas
-      } = this.data.img
-      const nextCol = width * 4
-      let data = imageData.data
-      // let len = recData.length > 6 ? 6 : recData.length
-      let recRenderData = []
-
-      for (let i = 0; i < recData.length; i++) {
-
-        // 15 是 (recWidth - 50 / 2)
-        let line = recData[i].val - 15 * nextCol - 15 * 4
-        
-        if (line < 0) {
-          line = recData[i].val
+      compare(property) {
+        return (now, next) => {
+          let val1 = now[property];
+          let val2 = next[property];
+          return val2 - val1;
+        };
+      }
+      getOffsetTop(el) {
+        let top = el.offsetTop;
+        let parent = el.offsetParent;
+        while (parent) {
+          top += parent.offsetTop;
+          parent = parent.offsetParent;
         }
-        recData[i].recRenderData = []
-        for (let j = 0; j < recWidth; j++) {
-          // 行
-          let j_s = line + j * nextCol
-          let j_e = line + j * nextCol + recWidth * 4
-
-          for (let z = j_s; z < j_e; z += 4) {
-            // TODO 测试矩形位置
-            // data[z] = 0
-            // data[z + 1] = 0
-            // data[z + 2] = 255
-            data[z + 3] = 100
-            recData[i].recRenderData.push(z)
-          }
+        return top;
+      }
+      getOffsetLeft(el) {
+        let left = el.offsetLeft;
+        let parent = el.offsetParent;
+        while (parent) {
+          left += parent.offsetLeft;
+          parent = parent.offsetParent;
+        }
+        return left;
+      }
+      on(key, fn) {
+        if (this.call[key]) {
+          this.call[key] = fn;
         }
       }
-      this.data.img.ctx.putImageData(imageData, 0, 0)
     }
-    // 还原canvas
-    rezCanvas() {
-      const {
-        imageData,
-        oldImageData,
-      } = this.data.img
-      let data = imageData.data
-      let oldData = oldImageData.data
-
-      for (let i = 0; i < data.length; i += 4) {
-        data[i]     = oldData[i]; // red
-        data[i + 1] = oldData[i + 1]; // green
-        data[i + 2] = oldData[i + 2]; // blue
-      }
-      this.data.img.ctx.putImageData(imageData, 0, 0)
-    }
-    // 计算像素点
-    computePix() {
-      const {
-        recData,
-        imageData,
-        diff,
-        width,
-        height,
-        continuityDiff,
-      } = this.data.img
-      // TODO 容差值
-      let data = imageData.data
-      let colorArr = []
-      let sortArr = []
-
-      // 转换像素点，重组数组
-      recData.map((item, i) => {
-        colorArr.push({
-          key: i,
-          data: [],
-          colorMax: 0,
-          recRenderData: item.recRenderData,
-          sum: 0,
-          x: 0,
-          y: 0,
-          xyCenter: 0,
-          chooseNo: 0,
-        })
-        item.data.map(val => {
-          colorArr[i].data.push(data[val])
-        })
-        colorArr[i].colorMax = this.colorMax(colorArr[i].data)
-      })
-      
-      colorArr.map((item, _i) => {
-        // if (_i > 0) return
-        item.recRenderData.map(i => {
-          if (Math.abs(data[i] - item.colorMax) < diff) {
-            item.sum++
-            data[i]     = 255
-            data[i + 1] = 0
-            data[i + 2] = 0
-            // data[i + 3] = 0
-          }
-        })
-        // 矩形去噪 --- 是否要从 大 到小 递归下continuityDiff值？因为有些图去不掉
-        // 还有各种 纵横长方形的东西 - 长，高，diff值
-        this.recRenderDataFilter(item, data, 'longRec', continuityDiff * 4, continuityDiff * width, continuityDiff)
-        this.recRenderDataFilter(item, data, 'heightRec', continuityDiff, continuityDiff * width * 2 * 2, continuityDiff)
-
-        // 计算居中值 - 不是取值的居中数而是取数组的中间数
-        // 矩形像素点为偶数
-        if (item.recRenderData.length % 2 === 0) {
-          // 列数 + 行数 = 居中数
-          item.xyCenter = item.recRenderData[item.recRenderData.length / 2 + Math.sqrt(item.recRenderData.length) / 2]
-        } else {
-          // 奇数
-          item.xyCenter = item.recRenderData[parseInt(item.recRenderData.length / 2)]
-        }
-
-        // 计算坐标
-        item.x = item.xyCenter / 4 % width - 10
-        item.y = (item.xyCenter / 4 - item.x) / width - 10
-      })
-      // 添加排序字段
-      sortArr = JSON.parse(JSON.stringify(colorArr)).sort(this.compare('sum'))
-      sortArr.map((item, i) => {
-        colorArr.find(items => {
-          if (item.key === items.key) {
-            items.chooseNo = i
-            return true
-          }
-        })
-      })
-      this.data.img.ctx.putImageData(imageData, 0, 0)
-      this.data.img.colorArr = colorArr
-      console.log(colorArr)
-    }
-    // 长宽矩形去噪
-    recRenderDataFilter(item, data, type, diffILen, diffJLen, continuityDiff) {
-      const {
-        width,
-        imageData
-      } = this.data.img
-      let recRenderDataHandle = []
-      let _sum = 0
-
-      item.recRenderData.map((__i, index) => {
-        // if (index !== 4400) return
-        for (let j = __i; j < __i + diffILen; j += 4) {
-          for (let z = j; z < j + diffJLen; z += 4 * width) {
-            if (data[z] === 255) {
-              _sum++
-              recRenderDataHandle.push(__i)
-              // data[z]     = 0
-              // data[z + 1] = 255
-              // data[z + 2] = 0
-            } else {
-              _sum = 0
-              recRenderDataHandle = []
-              break
-            }
-            
-          }
-        }
-        // console.log(_sum)
-        if (_sum >= continuityDiff * 6) {
-          recRenderDataHandle.map(___i => {
-            data[___i]     = 0
-            data[___i + 1] = 255
-            data[___i + 2] = 0
-            // data[___i + 3] = 255
-          })
-          item.sum--
-          _sum = 0
-          recRenderDataHandle = []
-        }
-      })
-    }
-    // 数据匹配以及打点
-    posRender(diff = this.data.img.posDiff, txAlArr = [], colorAlArr = []) {
-      const {
-        colorArr
-      } = this.data.img
-      const {
-        textArr
-      } = this.data.verImg
-
-      textArr.map(item => {
-        // 若捕获值跟校验个数相同，则按大到小选中
-        if (textArr.length === colorArr.length) {
-          colorArr.find(items => {
-            if (items.chooseNo === item.chooseNo) {
-              const dom = document.createElement('div')
-              dom.className = 'pos'
-              dom.style.left = items.x + 'px'
-              dom.style.top = items.y + 'px'
-              dom.innerText = item.key + 1
-              document.querySelector('.canvas').appendChild(dom)
-              txAlArr.push(item.key)
-              return true
-            }
-          })
-          return
-        }
-        if (txAlArr.includes(item.key)) {
-          return
-        }
-        // 若捕获数不相同（其实只可能比字数多，前面已经做校验了），则按照像素点临近的去匹配
-        colorArr.find(items => {
-          if (colorAlArr.includes(items.key)) {
-            return
-          }
-          if (Math.abs(items.sum - item.val) < diff) {
-            // TODO 这里是模拟渲染，正式脚本环境请转换为模拟点击图片
-            const dom = document.createElement('div')
-            dom.className = 'pos'
-            dom.style.left = items.x + 'px'
-            dom.style.top = items.y + 'px'
-            dom.innerText = item.key + 1
-            document.querySelector('.canvas').appendChild(dom)
-            txAlArr.push(item.key)
-            colorAlArr.push(items.key)
-            return true
-          }
-        })
-      })
-      // debugger
-      // 若最相近的点位找不到，则扩大diff值递归
-      if (txAlArr.length < textArr.length) {
-        this.posRender(diff + 30, txAlArr, colorAlArr)
-      }
-    }
-    // 计算color中出现最多的值
-    colorMax(arr) {
-      let data = {}
-      let newArr = []
-      // 累积
-      arr.map(val => {
-        if (data[val + ''] >= 0) {
-          data[val + '']++
-          return
-        }
-        data[val + ''] = 0
-      })
-      let max = {
-        key: 0,
-        val: 0
-      }
-      newArr = Object.keys(data)
-      // 超过10个像素点才可进行分割
-      if (newArr.length > 10) {
-        for (let i = 0; i < newArr.length / 2; i++) {
-          delete data[newArr[i]]
-        }
-      }
-      // 比较
-      Object.keys(data).map(key => {
-        if (data[key] > max.val) {
-          max = {
-            key,
-            val: data[key],
-          }
-        }
-      })
-      // console.log('color中出现最多的值', max)
-      
-      return max.key
-    }
-    textPix() {
-      const {
-        num,
-        width
-      } = this.data.verImg
-      const mid = parseInt(width / 4 / 2) * 4
-      let arr = []
-      let sortArr = []
-
-      if (num === 3) {
-        arr.push({
-          key: 0,
-          val: this.isCheckThickness(mid + parseInt(width / 4) * 4 - 4, width, mid + parseInt(width / 4) * 4, true)
-        },
-        {
-          key: 1,
-          val: this.isCheckThickness(mid + width / 2 * 4, width, width, true)
-        },
-        {
-          key: 2,
-          val: this.isCheckThickness(width * 4 - 4, width, mid + parseInt(width / 4) * 4, true)
-        })
-      } else {
-        // 2字
-        arr.push({
-          key: 0,
-          val: this.isCheckThickness(parseInt(width / 2) * 4 - 4, width, parseInt(width / 2) * 4, true)
-        },
-        {
-          key: 1,
-          val: this.isCheckThickness(width * 4 - 4, width, parseInt(width / 2) * 4, true)
-        })
-      }
-      // 添加值排序字段(不改变当前顺序)
-      // TODO
-      sortArr = JSON.parse(JSON.stringify(arr)).sort(this.compare('val'))
-      sortArr.map((item, i) => {
-        arr.find(items => {
-          if (item.key === items.key) {
-            items.chooseNo = i
-            return true
-          }
-        })
-      })
-      return arr
-    }
-    checkNumber() {
-      let {
-        canvas,
-        width,
-        ctx
-      } = this.data.verImg
-      let imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
-      let data = imageData.data
-      const mid = parseInt(width / 4 / 2) * 4
-
-      this.data.verImg.imageData = imageData
-      // 测试左侧是否有值
-      let isL1 = this.isCheckThickness(mid, width)
-      let isL2 = this.isCheckThickness(mid + parseInt(width / 4) * 4, width)
-      let isL3 = this.isCheckThickness(mid + width / 2 * 4, width)
-      let isL4 = this.isCheckThickness(mid * 3 + width / 2 * 4, width)
-
-      // 都碰到为4
-      if (isL1 && isL2 && isL3 && isL4) {
-        return 4
-      }
-      // 左边没擦到，第二根擦到为2
-      else if (!isL1 && isL2) {
-        return 2
-      }
-      return 3
-    }
-    // 检测个数
-    isCheckThickness(mid, width, fine = 3, isSum = false) {
-      let {
-        imageData
-      } = this.data.verImg
-      const data = imageData.data
-      let isTrue = false
-      let sum = 0
-
-      for (let i = mid; i < data.length; i += width * 4) {
-        for (let j = 0; j < fine; j += 4) {
-          let _i = i - j
-          
-          if (data[_i] < 200) {
-            if (isSum) {
-              sum++
-            } else {
-              return true
-            }
-            // return true
-            // break
-          }
-          // data[_i]     = 255; // red
-          // data[_i + 1] = 0; // green
-          // data[_i + 2] = 0; // blue
-        }
-      }
-      // this.data.verImg.ctx.putImageData(imageData, 0, 0)
-      if (isSum) {
-        return sum * 3
-      }
-      return isTrue
-    }
-    // 置灰
-    grayscale() {
-      const {
-        imageData
-      } = this.data.img
-      let data = imageData.data
-
-      for (let i = 0; i < data.length; i += 4) {
-        let avg = (data[i] + data[i +1] + data[i + 2]) / 3;
-        data[i]     = avg
-        data[i + 1] = avg
-        data[i + 2] = avg
-      }
-      this.data.img.ctx.putImageData(imageData, 0, 0)
-    }
-    // 综合去重
-    dupRemoval(data) {
-      let dupArr = []
-      return data.map(item => {
-        let newItem = []
-        item.data.map(val => {
-          if (!dupArr.includes(val)) {
-            dupArr.push(val)
-            newItem.push(val)
-          } else {
-            item.sum--
-          }
-        })
-        return {
-          ...item,
-          data: newItem,
-        }
-      })
-    }
-    // 去杂质 --- 递归直到算到符合校验的个数
-    dupImpurity(data, val) {
-      const {
-        num
-      } = this.data.verImg
-      let newData = []
-
-      data.map(item => item.sum >= val && newData.push(item))
-      if (newData.length < num) {
-        return this.dupImpurity(data, val - 10)
-      }
-      return newData
-    }
-    // 升序
-    compare(property) {
-      return (now, next) => {
-        let val1 = now[property]
-        let val2 = next[property]
-        return val2 - val1
-      }
-    }
-  }
-  new BilibiliOcr({
-    url: './img/4.jpg'
-  })
-</script>
+    const Ocr = new BilibiliOcr({
+      url: "./img/4.jpg"
+    });
+    // 返回的是屏幕坐标
+    Ocr.on("success", (key, x, y) => {
+      console.log(key, x, y);
+      document.elementFromPoint(x, y).click();
+    });
+    Ocr.on("fail", () => {
+      console.log("fail");
+    });
+  </script>
 </html>
