@@ -128,7 +128,7 @@
           _this.data.verImg.canvas = canvas;
           _this.data.verImg.ctx = ctx;
 
-          // document.body.appendChild(canvas);
+          document.body.appendChild(canvas);
           _this.verImgHandle();
         };
       }
@@ -183,7 +183,7 @@
           _this.data.img.canvas = canvas;
           _this.data.img.ctx = ctx;
 
-          // document.querySelector(".canvas").appendChild(canvas);
+          document.querySelector(".canvas").appendChild(canvas);
           _this.imgHandle();
         };
       }
@@ -194,21 +194,33 @@
         this.data.img.oldImageData = JSON.parse(
           JSON.stringify(this.data.img.imageData)
         );
-
-        // 置灰
-        this.grayscale();
-        // 初步捕获对比度
-        this.pixels();
-        // 矩形降噪
-        this.recHandle();
-        // 矩形渲染
-        this.recRender();
-        // 重置像素点 - 会影响效果 注释吧
-        // this.rezCanvas()
-        // 计算像素点 - 及计算区域中的高频反差像素
-        this.computePix();
-        // 打点
-        this.posRender();
+        // 以下其实是同步的，为了演示，随便写了下
+        setTimeout(() => {
+          // 置灰
+          this.grayscale();
+          setTimeout(() => {
+            // 初步捕获对比度
+            this.pixels();
+            setTimeout(() => {
+              // 矩形降噪
+              this.recHandle();
+              setTimeout(() => {
+                // 矩形渲染
+                this.recRender();
+                setTimeout(() => {
+                  // 重置像素点 - 会影响效果 注释吧
+                  // this.rezCanvas()
+                  // 计算像素点 - 及计算区域中的高频反差像素
+                  this.computePix();
+                  setTimeout(() => {
+                    // 打点
+                    this.posRender();
+                  }, 500)
+                }, 500)
+              }, 500)
+            }, 0)
+          }, 1000)
+        }, 500)
       }
       pixels() {
         const { imageData, countAvg, countStart, countEnd } = this.data.img;
@@ -577,7 +589,7 @@
                 dom.style.height = dom.style.width = pos.width + "px";
                 dom.style.left = items.x + "px";
                 dom.style.top = items.y + "px";
-                dom.style.visibility = "hidden";
+                // dom.style.visibility = "hidden";
                 dom.style.position = "absolute";
 
                 this.props.el && this.props.el.appendChild(dom);
@@ -618,7 +630,7 @@
               dom.style.height = dom.style.width = pos.width + "px";
               dom.style.left = items.x + "px";
               dom.style.top = items.y + "px";
-              dom.style.visibility = "hidden";
+              // dom.style.visibility = "hidden";
               dom.style.position = "absolute";
 
               dom.innerText = item.key + 1;
@@ -797,9 +809,14 @@
               // return true
               // break
             }
-            // data[_i] = 255; // red
-            // data[_i + 1] = 0; // green
-            // data[_i + 2] = 0; // blue
+            // 为了演示的，这儿都可以注释
+            if (isSum) {
+              return
+            }
+            // 可注释
+            data[_i] = 255; // red
+            data[_i + 1] = 0; // green
+            data[_i + 2] = 0; // blue
           }
         }
         this.data.verImg.ctx.putImageData(imageData, 0, 0);
@@ -896,76 +913,5 @@
       console.log("fail");
     });
 
-    // b站自动执行脚本
-    const autoBilibiliOcr = () => {
-      setTimeout(() => {
-        // 重置 - 尝试次数过多
-        if (
-          document.querySelector(".geetest_panel_error").style.display !==
-          "none"
-        ) {
-          document.querySelector(".geetest_panel_error_content").click();
-          autoBilibiliOcr();
-          return;
-        }
-
-        // 成功
-        if (
-          document.querySelector(".geetest_panel_next").style.display === "none"
-        ) {
-          return;
-        }
-        var Ocr = new BilibiliOcr({
-          url: document.querySelector(".geetest_item_img").src,
-          el: document.querySelector(".geetest_item_wrap")
-        });
-        // 返回的是屏幕坐标
-        Ocr.on("success", (key, x, y, isEnd) => {
-          console.log(key, x, y);
-          var evt = document.createEvent("MouseEvents");
-
-          evt.initMouseEvent(
-            "click",
-            true,
-            false,
-            null,
-            0,
-            0,
-            0,
-            x - 135,
-            y - 180,
-            false,
-            false,
-            false,
-            false,
-            0,
-            null
-          );
-          document.querySelector(".geetest_item_wrap").dispatchEvent(evt);
-          if (isEnd) {
-            document.querySelector(".geetest_commit").click();
-            setTimeout(() => {
-              // 重置 - 等待fail状态结束
-              if (
-                document.querySelector(
-                  ".geetest_result_tip.geetest_up.geetest_fail"
-                )
-              ) {
-                setTimeout(() => {
-                  autoBilibiliOcr();
-                }, 1500 + parseInt(Math.random() * 1000));
-                return;
-              }
-            }, 500);
-          }
-        });
-        Ocr.on("fail", () => {
-          // 重置
-          document.querySelector(".geetest_refresh").click();
-          console.log("fail");
-          autoBilibiliOcr();
-        });
-      }, 800 + parseInt(Math.random() * 1000));
-    };
   </script>
 </html>
